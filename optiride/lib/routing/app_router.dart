@@ -1,0 +1,16 @@
+import 'package:go_router/go_router.dart';
+import '../features/search/presentation/search_page.dart';
+import '../features/offers/presentation/offers_page.dart';
+
+final GoRouter appRouter = GoRouter(
+  routes: [
+    GoRoute(
+      path: '/',
+  builder: (context, state) => const SearchView(),
+    ),
+    GoRoute(
+      path: '/offers',
+  builder: (context, state) => const ResultsView(),
+    ),
+  ],
+);
