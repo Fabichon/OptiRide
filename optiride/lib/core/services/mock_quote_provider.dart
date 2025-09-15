@@ -1,12 +1,12 @@
 import 'dart:async';
 import 'dart:math';
 
-import '../models/provider_id.dart';
-import '../models/ride_offer.dart';
-import '../models/search_query.dart';
-import '../models/vehicle_class.dart';
-import '../models/service_tag.dart';
-import 'quote_provider.dart';
+import 'package:optiride/core/models/provider_id.dart';
+import 'package:optiride/core/models/ride_offer.dart';
+import 'package:optiride/core/models/search_query.dart';
+import 'package:optiride/core/models/vehicle_class.dart';
+import 'package:optiride/core/models/service_tag.dart';
+import 'package:optiride/core/services/quote_provider.dart';
 
 class MockQuoteProvider implements QuoteProvider {
   final _rnd = Random();

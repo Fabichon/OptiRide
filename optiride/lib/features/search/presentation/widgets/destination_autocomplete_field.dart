@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../providers.dart';
-import '../../../../core/models/place_suggestion.dart';
+import 'package:optiride/providers.dart';
+import 'package:optiride/core/models/place_suggestion.dart';
 
 class DestinationAutocompleteField extends ConsumerStatefulWidget {
   final TextEditingController controller;
@@ -98,7 +98,7 @@ class _DestinationAutocompleteFieldState extends ConsumerState<DestinationAutoco
   }
 
   void _closeOverlay() {
-    _entry?..remove();
+    _entry?.remove();
     _entry = null;
   }
 

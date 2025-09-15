@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../core/models/ride_offer.dart';
-import '../../../core/models/search_query.dart';
-import '../../../core/models/vehicle_class.dart';
-import '../../../core/models/service_tag.dart';
-import '../../../core/models/provider_id.dart';
-import '../../../providers.dart';
+import 'package:optiride/core/models/ride_offer.dart';
+import 'package:optiride/core/models/search_query.dart';
+import 'package:optiride/core/models/vehicle_class.dart';
+import 'package:optiride/core/models/service_tag.dart';
+import 'package:optiride/core/models/provider_id.dart';
+import 'package:optiride/providers.dart';
 
 class ResultsView extends ConsumerWidget {
   const ResultsView({super.key});
@@ -66,7 +66,7 @@ class _OffersWithFilters extends ConsumerWidget {
                     label: Text(vc.label),
                     selected: selected.contains(vc),
                     onSelected: (s) {
-                      final set = {...selected};
+                      final set = <VehicleClass>{...selected};
                       if (s) {
                         set.add(vc);
                       } else {
@@ -93,8 +93,12 @@ class _OffersWithFilters extends ConsumerWidget {
                     label: Text(tag.label),
                     selected: selectedTags.contains(tag),
                     onSelected: (s) {
-                      final set = {...selectedTags};
-                      if (s) set.add(tag); else set.remove(tag);
+                      final set = <ServiceTag>{...selectedTags};
+                      if (s) {
+                        set.add(tag);
+                      } else {
+                        set.remove(tag);
+                      }
                       ref.read(serviceTagFilterProvider.notifier).state = set;
                     },
                   ),

@@ -1,6 +1,6 @@
-import 'provider_id.dart';
-import 'vehicle_class.dart';
-import 'service_tag.dart';
+import 'package:optiride/core/models/provider_id.dart';
+import 'package:optiride/core/models/vehicle_class.dart';
+import 'package:optiride/core/models/service_tag.dart';
 
 class RideOffer {
   final ProviderId provider;

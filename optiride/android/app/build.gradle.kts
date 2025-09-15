@@ -47,6 +47,4 @@ flutter {
     source = "../.."
 }
 
-<meta-data
-    android:name="com.google.android.geo.API_KEY"
-    android:value="${MAPS_API_KEY}" />
+// ...existing code...

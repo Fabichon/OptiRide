@@ -1,17 +1,19 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'core/services/quote_provider.dart';
-import 'core/services/mock_quote_provider.dart';
-import 'core/services/api_quote_provider.dart';
-import 'core/models/search_query.dart';
-import 'core/models/vehicle_class.dart';
-import 'core/models/ride_offer.dart';
-import 'core/services/places_service.dart';
-import 'core/models/place_suggestion.dart';
-import 'core/services/reverse_geocoding_service.dart';
-import 'core/models/service_tag.dart';
+import 'package:optiride/core/services/quote_provider.dart';
+import 'package:optiride/core/services/mock_quote_provider.dart';
+import 'package:optiride/core/services/api_quote_provider.dart';
+import 'package:optiride/core/models/search_query.dart';
+import 'package:optiride/core/models/vehicle_class.dart';
+import 'package:optiride/core/models/ride_offer.dart';
+import 'package:optiride/core/services/places_service.dart';
+import 'package:optiride/core/models/place_suggestion.dart';
+import 'package:optiride/core/services/reverse_geocoding_service.dart';
+import 'package:optiride/core/models/service_tag.dart';
 import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:optiride/core/services/directions_service.dart';
 
 final apiBaseUrlProvider = Provider<String>((_) => 'http://localhost:8081');
 
@@ -54,10 +56,19 @@ class _DeferredQuoteProvider implements QuoteProvider {
   }
 }
 
-final searchQueryProvider = StateProvider<SearchQuery>((ref) => const SearchQuery(pickupAddress: '', destinationAddress: ''));
+// Requête de recherche
+final searchQueryProvider = StateProvider<SearchQuery>(
+  (ref) => const SearchQuery(pickupAddress: '', destinationAddress: ''),
+);
 
-final vehicleClassFilterProvider = StateProvider<Set<VehicleClass>>((ref) => <VehicleClass>{});
-final serviceTagFilterProvider = StateProvider<Set<ServiceTag>>((ref) => <ServiceTag>{});
+// Filtrage par classe de véhicule
+final vehicleClassFilterProvider = StateProvider<Set<VehicleClass>>(
+  (ref) => <VehicleClass>{},
+);
+// Filtrage par étiquette de service
+final serviceTagFilterProvider = StateProvider<Set<ServiceTag>>(
+  (ref) => <ServiceTag>{},
+);
 
 final offersStreamProvider = StreamProvider.autoDispose((ref) {
   final query = ref.watch(searchQueryProvider);
@@ -88,7 +99,8 @@ final currentPositionProvider = FutureProvider<Position?>((ref) async {
     perm = await Geolocator.requestPermission();
     if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) return null;
   }
-  return Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+  const settings = LocationSettings(accuracy: LocationAccuracy.best, distanceFilter: 5);
+  return Geolocator.getCurrentPosition(locationSettings: settings);
 });
 
 final placesServiceProvider = Provider<PlacesService>((ref) {
@@ -96,7 +108,10 @@ final placesServiceProvider = Provider<PlacesService>((ref) {
   return PlacesService(key);
 });
 
-final destinationQueryProvider = StateProvider<String>((_) => '');
+// Texte de la saisie de destination
+final destinationQueryProvider = StateProvider<String>(
+  (ref) => '',
+);
 
 final _debounceDurationProvider = Provider<Duration>((_) => const Duration(milliseconds: 350));
 
@@ -135,3 +150,18 @@ final reverseGeocodingServiceProvider = Provider<ReverseGeocodingService>((ref) 
   final key = ref.watch(mapsApiKeyProvider);
   return ReverseGeocodingService(key);
 });
+
+// Contrôleur de la GoogleMap (stocké quand prêt)
+final mapControllerProvider = StateProvider<GoogleMapController?>((ref) => null);
+
+final directionsServiceProvider = Provider<DirectionsService>((ref) {
+  final key = ref.watch(mapsApiKeyProvider);
+  return DirectionsService(key);
+});
+
+// Stockage du dernier tracé calculé
+final routePolylineProvider = StateProvider<List<List<double>>>((_) => const []);
+final routeDistanceProvider = StateProvider<int>((_) => 0); // mètres
+final routeDurationProvider = StateProvider<int>((_) => 0); // secondes
+final routeCacheProvider = Provider<Map<String, DirectionsRoute>>((_) => <String, DirectionsRoute>{});
+final routeAnimationProgressProvider = StateProvider<double>((_) => 1.0); // 0..1 proportion du tracé affiché

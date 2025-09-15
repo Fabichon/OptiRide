@@ -1,6 +1,6 @@
 import 'package:go_router/go_router.dart';
-import '../features/search/presentation/search_page.dart';
-import '../features/offers/presentation/offers_page.dart';
+import 'package:optiride/features/search/presentation/search_page.dart';
+import 'package:optiride/features/offers/presentation/offers_page.dart';
 
 final GoRouter appRouter = GoRouter(
   routes: [

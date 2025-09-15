@@ -3,10 +3,10 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'package:http/http.dart' as http;
-import '../models/ride_offer.dart';
-import '../models/search_query.dart';
-import 'quote_provider.dart';
-import '../utils/app_logger.dart';
+import 'package:optiride/core/models/ride_offer.dart';
+import 'package:optiride/core/models/search_query.dart';
+import 'package:optiride/core/services/quote_provider.dart';
+import 'package:optiride/core/utils/app_logger.dart';
 
 class ApiQuoteProvider implements QuoteProvider {
   final String baseUrl;

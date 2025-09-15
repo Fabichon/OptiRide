@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import '../models/place_suggestion.dart';
-import '../models/place_details.dart';
+import 'package:optiride/core/models/place_suggestion.dart';
+import 'package:optiride/core/models/place_details.dart';
 
 class PlacesService {
   final String apiKey;
