@@ -14,6 +14,6 @@ void main() {
   testWidgets('Search view initial state', (WidgetTester tester) async {
     await tester.pumpWidget(const ProviderScope(child: OptiRideApp()));
     expect(find.text('OptiRide - Recherche'), findsOneWidget);
-    expect(find.text('Comparer les offres'), findsOneWidget);
+    expect(find.text('Comparer'), findsOneWidget);
   });
 }

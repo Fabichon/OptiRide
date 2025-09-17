@@ -113,7 +113,76 @@ final destinationQueryProvider = StateProvider<String>(
   (ref) => '',
 );
 
-final _debounceDurationProvider = Provider<Duration>((_) => const Duration(milliseconds: 350));
+// Texte de la saisie d'origine
+final originQueryProvider = StateProvider<String>(
+  (ref) => '',
+);
+
+final _debounceDurationProvider = Provider<Duration>((_) => const Duration(milliseconds: 150));
+
+// Provider pour les suggestions de destination
+final destinationSuggestionsProvider = StreamProvider.autoDispose<List<PlaceSuggestion>>((ref) {
+  final svc = ref.watch(placesServiceProvider);
+  final debounce = ref.watch(_debounceDurationProvider);
+  final controller = StreamController<List<PlaceSuggestion>>();
+  Timer? timer;
+  void listener() {
+    timer?.cancel();
+    final query = ref.read(destinationQueryProvider);
+    if (query.trim().length < 1) {
+      controller.add(const []);
+      return;
+    }
+    timer = Timer(debounce, () async {
+      try {
+        final res = await svc.autocomplete(query);
+        controller.add(res);
+      } catch (_) {
+        controller.add(const []);
+      }
+    });
+  }
+  final sub = ref.listen<String>(destinationQueryProvider, (_, __) => listener());
+  listener();
+  ref.onDispose(() {
+    timer?.cancel();
+    sub.close();
+    controller.close();
+  });
+  return controller.stream;
+});
+
+// Provider pour les suggestions d'origine
+final originSuggestionsProvider = StreamProvider.autoDispose<List<PlaceSuggestion>>((ref) {
+  final svc = ref.watch(placesServiceProvider);
+  final debounce = ref.watch(_debounceDurationProvider);
+  final controller = StreamController<List<PlaceSuggestion>>();
+  Timer? timer;
+  void listener() {
+    timer?.cancel();
+    final query = ref.read(originQueryProvider);
+    if (query.trim().length < 1) {
+      controller.add(const []);
+      return;
+    }
+    timer = Timer(debounce, () async {
+      try {
+        final res = await svc.autocomplete(query);
+        controller.add(res);
+      } catch (_) {
+        controller.add(const []);
+      }
+    });
+  }
+  final sub = ref.listen<String>(originQueryProvider, (_, __) => listener());
+  listener();
+  ref.onDispose(() {
+    timer?.cancel();
+    sub.close();
+    controller.close();
+  });
+  return controller.stream;
+});
 
 final placeSuggestionsProvider = StreamProvider.autoDispose<List<PlaceSuggestion>>((ref) {
   final svc = ref.watch(placesServiceProvider);

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:optiride/providers.dart';
+import 'dart:async';
+import 'dart:math' as math;
 
 class SearchMap extends ConsumerStatefulWidget {
   final void Function(LatLng latLng)? onPickOrigin;
@@ -9,70 +11,207 @@ class SearchMap extends ConsumerStatefulWidget {
   final bool fullScreen;
   final LatLng? origin;
   final LatLng? destination;
-  const SearchMap({super.key, this.onPickOrigin, this.onMoveDestination, this.fullScreen = false, this.origin, this.destination});
+  final List<LatLng>? routePolyline;
+  const SearchMap({
+    super.key,
+    this.onPickOrigin,
+    this.onMoveDestination,
+    this.fullScreen = false,
+    this.origin,
+    this.destination,
+    this.routePolyline,
+  });
   @override
   ConsumerState<SearchMap> createState() => _SearchMapState();
 }
 
-class _SearchMapState extends ConsumerState<SearchMap> {
-  LatLng? _origin; // interne si non fourni
+class _SearchMapState extends ConsumerState<SearchMap> with TickerProviderStateMixin {
+  GoogleMapController? _mapController;
+  AnimationController? _animationController;
+  List<LatLng> _animatedPolylinePoints = [];
+  Timer? _animationTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(seconds: 2),
+      vsync: this,
+    );
+  }
+
+  @override
+  void didUpdateWidget(SearchMap oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    
+    // Déclencher l'animation quand une nouvelle route est disponible
+    if (widget.routePolyline != null && 
+        widget.routePolyline!.isNotEmpty &&
+        (oldWidget.routePolyline != widget.routePolyline ||
+         oldWidget.routePolyline == null ||
+         oldWidget.routePolyline!.isEmpty)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _startRouteAnimation(widget.routePolyline!);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _animationController?.dispose();
+    _animationTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startRouteAnimation(List<LatLng> route) {
+    if (route.isEmpty || _animationController == null || _mapController == null) return;
+    
+    _animationController!.reset();
+    _animatedPolylinePoints.clear();
+    
+    // Animation de zoom pour voir les deux points
+    _fitBoundsToRoute(route);
+    
+    // Animation du tracé de la route
+    _animationTimer?.cancel();
+    
+    const int totalSteps = 50;
+    int currentStep = 0;
+    
+    _animationTimer = Timer.periodic(const Duration(milliseconds: 60), (timer) {
+      if (currentStep >= totalSteps || !mounted) {
+        timer.cancel();
+        return;
+      }
+      
+      final progress = currentStep / totalSteps;
+      final pointIndex = (progress * (route.length - 1)).round();
+      
+      if (pointIndex < route.length && !_animatedPolylinePoints.contains(route[pointIndex])) {
+        setState(() {
+          _animatedPolylinePoints = route.take(pointIndex + 1).toList();
+        });
+      }
+      
+      currentStep++;
+    });
+    
+    _animationController!.forward();
+  }
+
+  void _fitBoundsToRoute(List<LatLng> route) {
+    if (route.isEmpty || _mapController == null) return;
+
+    double minLat = route.first.latitude;
+    double maxLat = route.first.latitude;
+    double minLng = route.first.longitude;
+    double maxLng = route.first.longitude;
+
+    for (final point in route) {
+      minLat = math.min(minLat, point.latitude);
+      maxLat = math.max(maxLat, point.latitude);
+      minLng = math.min(minLng, point.longitude);
+      maxLng = math.max(maxLng, point.longitude);
+    }
+
+    // Ajouter une marge
+    const double padding = 0.01;
+    final bounds = LatLngBounds(
+      southwest: LatLng(minLat - padding, minLng - padding),
+      northeast: LatLng(maxLat + padding, maxLng + padding),
+    );
+
+    _mapController!.animateCamera(CameraUpdate.newLatLngBounds(bounds, 100));
+  }
 
   @override
   Widget build(BuildContext context) {
     final posAsync = ref.watch(currentPositionProvider);
     final mapWidget = posAsync.when(
       data: (pos) {
-        final center = pos != null ? LatLng(pos.latitude, pos.longitude) : const LatLng(48.8566, 2.3522);
-        final effectiveOrigin = widget.origin ?? _origin;
-        final polyPoints = ref.watch(routePolylineProvider);
+        final LatLng center = widget.origin ?? (pos != null ? LatLng(pos.latitude, pos.longitude) : const LatLng(48.8566, 2.3522));
+        
+        final Set<Marker> markers = {};
+        if (widget.origin != null) {
+          markers.add(Marker(
+            markerId: const MarkerId('origin'),
+            position: widget.origin!,
+            draggable: true,
+            onDragEnd: (newPosition) {
+              if (widget.onPickOrigin != null) {
+                widget.onPickOrigin!(newPosition);
+              }
+            },
+            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure), // Turquoise pour départ
+            infoWindow: const InfoWindow(title: 'Départ'),
+          ));
+        }
+        if (widget.destination != null) {
+          markers.add(Marker(
+            markerId: const MarkerId('destination'),
+            position: widget.destination!,
+            draggable: true,
+            onDragEnd: (newPosition) {
+              if (widget.onMoveDestination != null) {
+                widget.onMoveDestination!(newPosition);
+              }
+            },
+            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueCyan), // Cyan pour destination
+            infoWindow: const InfoWindow(title: 'Destination'),
+          ));
+        }
+        final Set<Polyline> polylines = {};
+        
+        // Polyline de base (gris clair) pour montrer le trajet complet
+        if (widget.routePolyline != null && widget.routePolyline!.isNotEmpty) {
+          polylines.add(Polyline(
+            polylineId: const PolylineId('route_base'),
+            points: widget.routePolyline!,
+            color: Colors.grey.shade300,
+            width: 6,
+          ));
+        }
+        
+        // Polyline animée (bleu turquoise) qui se dessine progressivement
+        if (_animatedPolylinePoints.isNotEmpty) {
+          polylines.add(Polyline(
+            polylineId: const PolylineId('route_animated'),
+            points: _animatedPolylinePoints,
+            color: const Color(0xFF40E0D0), // Bleu turquoise
+            width: 5,
+            patterns: [], // Ligne continue
+          ));
+        }
         return GoogleMap(
-          initialCameraPosition: CameraPosition(target: center, zoom: 13),
+          initialCameraPosition: CameraPosition(target: center, zoom: 14),
+          markers: markers,
+          polylines: polylines,
+          myLocationEnabled: true,
           myLocationButtonEnabled: true,
-          myLocationEnabled: pos != null,
-          markers: {
-            if (effectiveOrigin != null)
-              Marker(
-                markerId: const MarkerId('origin'),
-                position: effectiveOrigin,
-                draggable: true,
-                onDragEnd: (p) {
-                  if (widget.onPickOrigin != null) {
-                    widget.onPickOrigin!(p);
-                  }
-                },
-              ),
-            if (widget.destination != null)
-              Marker(
-                markerId: const MarkerId('destination'),
-                position: widget.destination!,
-                icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
-                draggable: true,
-                onDragEnd: (p) => widget.onMoveDestination?.call(p),
-              ),
+          mapType: MapType.normal,
+          compassEnabled: true,
+          rotateGesturesEnabled: true,
+          scrollGesturesEnabled: true,
+          tiltGesturesEnabled: true,
+          zoomGesturesEnabled: true,
+          zoomControlsEnabled: true, // Activer les boutons de zoom
+          // Pas de style personnalisé - couleurs par défaut de Google Maps
+          onMapCreated: (GoogleMapController controller) {
+            _mapController = controller;
           },
-          polylines: {
-            if (polyPoints.isNotEmpty)
-              () {
-                final progress = ref.watch(routeAnimationProgressProvider).clamp(0.0, 1.0);
-                final count = (polyPoints.length * progress).clamp(2, polyPoints.length).toInt();
-                final shown = polyPoints.take(count).map((e) => LatLng(e[0], e[1])).toList();
-                return Polyline(
-                  polylineId: const PolylineId('route'),
-                  width: 4,
-                  color: Colors.blueAccent,
-                  points: shown,
-                );
-              }(),
-          },
-          onTap: (latLng) {
-            if (widget.origin == null) {
-              setState(() => _origin = latLng);
+          onTap: (LatLng position) {
+            // Si on n'a pas d'origine, définir le point tapé comme origine
+            if (widget.origin == null && widget.onPickOrigin != null) {
+              widget.onPickOrigin!(position);
             }
-            widget.onPickOrigin?.call(latLng);
-          },
-          onMapCreated: (c) {
-            // stocker dans provider
-            ref.read(mapControllerProvider.notifier).state = c;
+            // Si on a une origine mais pas de destination, définir comme destination
+            else if (widget.destination == null && widget.onMoveDestination != null) {
+              widget.onMoveDestination!(position);
+            }
+            // Si on a les deux, mettre à jour la destination
+            else if (widget.onMoveDestination != null) {
+              widget.onMoveDestination!(position);
+            }
           },
         );
       },
@@ -90,7 +229,7 @@ class _SearchMapState extends ConsumerState<SearchMap> {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 4),
-            const Text('Vérifie la clé API et les permissions.' , style: TextStyle(fontSize: 11, color: Colors.grey)),
+            const Text('Vérifie la clé API, le package et les permissions.' , style: TextStyle(fontSize: 11, color: Colors.grey)),
           ],
         ),
       ),
@@ -100,12 +239,7 @@ class _SearchMapState extends ConsumerState<SearchMap> {
       return Positioned.fill(child: mapWidget);
     }
 
-    return AspectRatio(
-      aspectRatio: 16 / 9,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: mapWidget,
-      ),
-    );
+    // Prendre tout l'espace disponible au lieu d'AspectRatio
+    return mapWidget;
   }
 }

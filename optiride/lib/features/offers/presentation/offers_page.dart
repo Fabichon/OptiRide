@@ -14,9 +14,17 @@ class ResultsView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final query = GoRouterState.of(context).extra as SearchQuery?;
+    
+    // Utiliser un effet pour injecter la query sans modifier le provider dans build
+    ref.listen<SearchQuery>(searchQueryProvider, (previous, next) {});
+    
+    // Injecter la query de manière asynchrone
     if (query != null) {
-      ref.read(searchQueryProvider.notifier).state = query; // inject query
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(searchQueryProvider.notifier).state = query;
+      });
     }
+    
     final asyncOffers = ref.watch(offersStreamProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Offres')),
