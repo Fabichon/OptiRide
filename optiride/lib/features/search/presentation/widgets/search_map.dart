@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:optiride/providers.dart';
+import 'package:geolocator/geolocator.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -30,6 +31,8 @@ class _SearchMapState extends ConsumerState<SearchMap> with TickerProviderStateM
   AnimationController? _animationController;
   List<LatLng> _animatedPolylinePoints = [];
   Timer? _animationTimer;
+  LatLng? _pendingCenter; // Centre à appliquer dès que la carte est prête
+  bool _centeredFromCurrent = false; // Évite de recentrer plusieurs fois
 
   @override
   void initState() {
@@ -38,6 +41,26 @@ class _SearchMapState extends ConsumerState<SearchMap> with TickerProviderStateM
       duration: const Duration(seconds: 2),
       vsync: this,
     );
+
+    // Quand la position courante est récupérée pour la première fois, centrer la carte
+    ref.listen<AsyncValue<Position?>>(currentPositionProvider, (prev, next) {
+      next.whenData((pos) {
+        if (!mounted || pos == null || _centeredFromCurrent) return;
+        // Ne pas surcentrer si une origine a déjà été choisie
+        if (widget.origin == null) {
+          final target = LatLng(pos.latitude, pos.longitude);
+          if (_mapController != null) {
+            _mapController!.animateCamera(
+              CameraUpdate.newLatLngZoom(target, 15),
+            );
+            _centeredFromCurrent = true;
+          } else {
+            // Carte pas encore prête, mémoriser pour onMapCreated
+            _pendingCenter = target;
+          }
+        }
+      });
+    });
   }
 
   @override
@@ -53,6 +76,11 @@ class _SearchMapState extends ConsumerState<SearchMap> with TickerProviderStateM
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _startRouteAnimation(widget.routePolyline!);
       });
+    }
+
+    // Si l'origine a changé, recentrer la carte dessus
+    if (oldWidget.origin != widget.origin && widget.origin != null && _mapController != null) {
+      _mapController!.animateCamera(CameraUpdate.newLatLngZoom(widget.origin!, 15));
     }
   }
 
@@ -142,7 +170,7 @@ class _SearchMapState extends ConsumerState<SearchMap> with TickerProviderStateM
                 widget.onPickOrigin!(newPosition);
               }
             },
-            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure), // Turquoise pour départ
+            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueCyan), // Couleur proche #64A9A7 pour départ
             infoWindow: const InfoWindow(title: 'Départ'),
           ));
         }
@@ -156,7 +184,7 @@ class _SearchMapState extends ConsumerState<SearchMap> with TickerProviderStateM
                 widget.onMoveDestination!(newPosition);
               }
             },
-            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueCyan), // Cyan pour destination
+            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen), // Variation pour distinction
             infoWindow: const InfoWindow(title: 'Destination'),
           ));
         }
@@ -177,9 +205,9 @@ class _SearchMapState extends ConsumerState<SearchMap> with TickerProviderStateM
           polylines.add(Polyline(
             polylineId: const PolylineId('route_animated'),
             points: _animatedPolylinePoints,
-            color: const Color(0xFF40E0D0), // Bleu turquoise
+            color: const Color(0xFF64A9A7), // Couleur principale
             width: 5,
-            patterns: [], // Ligne continue
+            patterns: const [], // Ligne continue
           ));
         }
         return GoogleMap(
@@ -196,8 +224,16 @@ class _SearchMapState extends ConsumerState<SearchMap> with TickerProviderStateM
           zoomGesturesEnabled: true,
           zoomControlsEnabled: true, // Activer les boutons de zoom
           // Pas de style personnalisé - couleurs par défaut de Google Maps
-          onMapCreated: (GoogleMapController controller) {
+          onMapCreated: (GoogleMapController controller) async {
             _mapController = controller;
+            // Si une position est en attente et aucune origine définie, centrer maintenant
+            if (widget.origin == null && _pendingCenter != null && !_centeredFromCurrent) {
+              await _mapController!.animateCamera(CameraUpdate.newLatLngZoom(_pendingCenter!, 15));
+              _centeredFromCurrent = true;
+              _pendingCenter = null;
+            } else if (widget.origin != null) {
+              await _mapController!.animateCamera(CameraUpdate.newLatLngZoom(widget.origin!, 15));
+            }
           },
           onTap: (LatLng position) {
             // Si on n'a pas d'origine, définir le point tapé comme origine

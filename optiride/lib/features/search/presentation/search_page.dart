@@ -171,7 +171,7 @@ class _SearchViewState extends ConsumerState<SearchView> {
                 Center(
                   child: Container(
                     decoration: BoxDecoration(
-                      color: Colors.blue,
+                      color: Theme.of(context).colorScheme.primary,
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: IconButton(
@@ -209,7 +209,7 @@ class _SearchViewState extends ConsumerState<SearchView> {
                   child: ElevatedButton(
                     onPressed: _isQueryComplete() ? _calculateRoute : null,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
+                      backgroundColor: Theme.of(context).colorScheme.primary,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),

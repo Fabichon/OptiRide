@@ -76,7 +76,7 @@ final offersStreamProvider = StreamProvider.autoDispose((ref) {
   final tagFilters = ref.watch(serviceTagFilterProvider);
   if (!query.isComplete) {
     return const Stream<List<RideOffer>>.empty();
-  }
+    }
   final qp = ref.watch(quoteProviderImpl);
   return qp.watchQuotes(query).map((list) {
     var out = list;
@@ -90,7 +90,13 @@ final offersStreamProvider = StreamProvider.autoDispose((ref) {
   });
 });
 
-final mapsApiKeyProvider = Provider<String>((_) => const String.fromEnvironment('MAPS_API_KEY', defaultValue: ''));
+// Fallback: si --dart-define MAPS_API_KEY est absent, on utilise la même clé que celle du Manifest Android
+// Remplacez cette valeur par une variable d'environnement en prod.
+const String _manifestMapsApiKeyFallback = 'AIzaSyBo3-1sjE-P4F_uopvde9mUK-_kG5HAbDY';
+final mapsApiKeyProvider = Provider<String>((_) => const String.fromEnvironment(
+      'MAPS_API_KEY',
+      defaultValue: _manifestMapsApiKeyFallback,
+    ));
 
 final currentPositionProvider = FutureProvider<Position?>((ref) async {
   if (!await Geolocator.isLocationServiceEnabled()) return null;
@@ -124,18 +130,25 @@ final _debounceDurationProvider = Provider<Duration>((_) => const Duration(milli
 final destinationSuggestionsProvider = StreamProvider.autoDispose<List<PlaceSuggestion>>((ref) {
   final svc = ref.watch(placesServiceProvider);
   final debounce = ref.watch(_debounceDurationProvider);
+  final posAsync = ref.watch(currentPositionProvider);
   final controller = StreamController<List<PlaceSuggestion>>();
   Timer? timer;
   void listener() {
     timer?.cancel();
     final query = ref.read(destinationQueryProvider);
-    if (query.trim().length < 1) {
+    if (query.trim().isEmpty) {
       controller.add(const []);
       return;
     }
     timer = Timer(debounce, () async {
       try {
-        final res = await svc.autocomplete(query);
+        final pos = posAsync.asData?.value;
+        final res = await svc.autocomplete(
+          query,
+          latitude: pos?.latitude,
+          longitude: pos?.longitude,
+          radius: 50000, // 50km de rayon pour privilégier le local
+        );
         controller.add(res);
       } catch (_) {
         controller.add(const []);
@@ -156,18 +169,25 @@ final destinationSuggestionsProvider = StreamProvider.autoDispose<List<PlaceSugg
 final originSuggestionsProvider = StreamProvider.autoDispose<List<PlaceSuggestion>>((ref) {
   final svc = ref.watch(placesServiceProvider);
   final debounce = ref.watch(_debounceDurationProvider);
+  final posAsync = ref.watch(currentPositionProvider);
   final controller = StreamController<List<PlaceSuggestion>>();
   Timer? timer;
   void listener() {
     timer?.cancel();
     final query = ref.read(originQueryProvider);
-    if (query.trim().length < 1) {
+    if (query.trim().isEmpty) {
       controller.add(const []);
       return;
     }
     timer = Timer(debounce, () async {
       try {
-        final res = await svc.autocomplete(query);
+        final pos = posAsync.asData?.value;
+        final res = await svc.autocomplete(
+          query,
+          latitude: pos?.latitude,
+          longitude: pos?.longitude,
+          radius: 50000,
+        );
         controller.add(res);
       } catch (_) {
         controller.add(const []);
@@ -187,6 +207,7 @@ final originSuggestionsProvider = StreamProvider.autoDispose<List<PlaceSuggestio
 final placeSuggestionsProvider = StreamProvider.autoDispose<List<PlaceSuggestion>>((ref) {
   final svc = ref.watch(placesServiceProvider);
   final debounce = ref.watch(_debounceDurationProvider);
+  final posAsync = ref.watch(currentPositionProvider);
   final controller = StreamController<List<PlaceSuggestion>>();
   Timer? timer;
   void listener() {
@@ -198,7 +219,13 @@ final placeSuggestionsProvider = StreamProvider.autoDispose<List<PlaceSuggestion
     }
     timer = Timer(debounce, () async {
       try {
-        final res = await svc.autocomplete(query);
+        final pos = posAsync.asData?.value;
+        final res = await svc.autocomplete(
+          query,
+          latitude: pos?.latitude,
+          longitude: pos?.longitude,
+          radius: 50000,
+        );
         controller.add(res);
       } catch (_) {
         controller.add(const []);

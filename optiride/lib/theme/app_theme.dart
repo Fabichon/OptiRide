@@ -1,6 +1,24 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  static ThemeData light() => ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo), useMaterial3: true);
-  static ThemeData dark() => ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo, brightness: Brightness.dark), useMaterial3: true);
+  static const Color primary = Color(0xFF64A9A7);
+
+  static ThemeData light() => ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: primary),
+        useMaterial3: true,
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: primary,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        ),
+        inputDecorationTheme: const InputDecorationTheme(
+          border: OutlineInputBorder(),
+        ),
+      );
+  static ThemeData dark() => ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: primary, brightness: Brightness.dark),
+        useMaterial3: true,
+      );
 }

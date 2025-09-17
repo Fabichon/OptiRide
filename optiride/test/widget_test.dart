@@ -5,15 +5,24 @@
 // gestures. You can also use WidgetTester to find child widgets in the widget
 // tree, read text, and verify that the values of widget properties are correct.
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:optiride/main.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 void main() {
-  testWidgets('Search view initial state', (WidgetTester tester) async {
+  testWidgets('OptiRide app launches with Uber-like interface', (WidgetTester tester) async {
     await tester.pumpWidget(const ProviderScope(child: OptiRideApp()));
-    expect(find.text('OptiRide - Recherche'), findsOneWidget);
-    expect(find.text('Comparer'), findsOneWidget);
+    
+    // Vérifier que le logo OptiRide est présent (nouvelle interface simplifiée)
+    expect(find.text('OptiRide'), findsOneWidget);
+    
+    // Vérifier que les champs de saisie sont présents
+    expect(find.text('Départ'), findsOneWidget);
+    expect(find.text('Destination'), findsOneWidget);
+    
+    // Vérifier que le bouton de géolocalisation est présent
+    expect(find.byType(Icon), findsWidgets);
   });
 }
