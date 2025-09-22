@@ -33,6 +33,8 @@ class _SearchMapState extends ConsumerState<SearchMap> with TickerProviderStateM
   Timer? _animationTimer;
   LatLng? _pendingCenter; // Centre à appliquer dès que la carte est prête
   bool _centeredFromCurrent = false; // Évite de recentrer plusieurs fois
+  String? _lastRouteSignature; // Pour détecter les changements de tracé
+  List<LatLng>? _pendingRouteToAnimate; // Route à animer quand la carte sera prête
 
   @override
   void initState() {
@@ -41,46 +43,39 @@ class _SearchMapState extends ConsumerState<SearchMap> with TickerProviderStateM
       duration: const Duration(seconds: 2),
       vsync: this,
     );
-
-    // Quand la position courante est récupérée pour la première fois, centrer la carte
-    ref.listen<AsyncValue<Position?>>(currentPositionProvider, (prev, next) {
-      next.whenData((pos) {
-        if (!mounted || pos == null || _centeredFromCurrent) return;
-        // Ne pas surcentrer si une origine a déjà été choisie
-        if (widget.origin == null) {
-          final target = LatLng(pos.latitude, pos.longitude);
-          if (_mapController != null) {
-            _mapController!.animateCamera(
-              CameraUpdate.newLatLngZoom(target, 15),
-            );
-            _centeredFromCurrent = true;
-          } else {
-            // Carte pas encore prête, mémoriser pour onMapCreated
-            _pendingCenter = target;
-          }
-        }
-      });
-    });
   }
 
   @override
   void didUpdateWidget(SearchMap oldWidget) {
     super.didUpdateWidget(oldWidget);
     
-    // Déclencher l'animation quand une nouvelle route est disponible
-    if (widget.routePolyline != null && 
-        widget.routePolyline!.isNotEmpty &&
-        (oldWidget.routePolyline != widget.routePolyline ||
-         oldWidget.routePolyline == null ||
-         oldWidget.routePolyline!.isEmpty)) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _startRouteAnimation(widget.routePolyline!);
-      });
+    // Déclencher l'animation dès que le tracé change, ou si l'origine/la destination change
+    final hasRoute = widget.routePolyline != null && widget.routePolyline!.isNotEmpty;
+    if (hasRoute) {
+      final sig = _computeRouteSignature(widget.routePolyline!);
+      final originChanged = oldWidget.origin != widget.origin;
+      final destChanged = oldWidget.destination != widget.destination;
+      final routeChanged = _lastRouteSignature != sig ||
+          oldWidget.routePolyline != widget.routePolyline ||
+          (oldWidget.routePolyline?.length ?? -1) != (widget.routePolyline?.length ?? -2);
+      if (routeChanged || originChanged || destChanged) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          // Si la carte n'est pas encore prête, mémoriser la route pour animer plus tard
+          if (_mapController == null) {
+            _pendingRouteToAnimate = List<LatLng>.from(widget.routePolyline!);
+          } else {
+            _startRouteAnimation(widget.routePolyline!);
+          }
+        });
+      }
     }
 
-    // Si l'origine a changé, recentrer la carte dessus
+    // Si l'origine a changé, recentrer la carte dessus seulement si aucune route n'est affichée
     if (oldWidget.origin != widget.origin && widget.origin != null && _mapController != null) {
-      _mapController!.animateCamera(CameraUpdate.newLatLngZoom(widget.origin!, 15));
+      final hasRouteNow = widget.routePolyline != null && widget.routePolyline!.isNotEmpty;
+      if (!hasRouteNow) {
+        _mapController!.animateCamera(CameraUpdate.newLatLngZoom(widget.origin!, 15));
+      }
     }
   }
 
@@ -96,6 +91,7 @@ class _SearchMapState extends ConsumerState<SearchMap> with TickerProviderStateM
     
     _animationController!.reset();
     _animatedPolylinePoints.clear();
+  _lastRouteSignature = _computeRouteSignature(route);
     
     // Animation de zoom pour voir les deux points
     _fitBoundsToRoute(route);
@@ -127,6 +123,14 @@ class _SearchMapState extends ConsumerState<SearchMap> with TickerProviderStateM
     _animationController!.forward();
   }
 
+  String _computeRouteSignature(List<LatLng> route) {
+    if (route.isEmpty) return 'empty';
+    final first = route.first;
+    final last = route.last;
+    return '${route.length}:${first.latitude.toStringAsFixed(5)},${first.longitude.toStringAsFixed(5)}>'
+        '${last.latitude.toStringAsFixed(5)},${last.longitude.toStringAsFixed(5)}';
+  }
+
   void _fitBoundsToRoute(List<LatLng> route) {
     if (route.isEmpty || _mapController == null) return;
 
@@ -152,9 +156,30 @@ class _SearchMapState extends ConsumerState<SearchMap> with TickerProviderStateM
     _mapController!.animateCamera(CameraUpdate.newLatLngBounds(bounds, 100));
   }
 
+  bool _refListenerInitialized = false;
   @override
   Widget build(BuildContext context) {
     final posAsync = ref.watch(currentPositionProvider);
+    // Écoute la position courante une seule fois dans build
+    if (!_refListenerInitialized) {
+      ref.listen<AsyncValue<Position?>>(currentPositionProvider, (prev, next) {
+        next.whenData((pos) {
+          if (!mounted || pos == null || _centeredFromCurrent) return;
+          if (widget.origin == null) {
+            final target = LatLng(pos.latitude, pos.longitude);
+            if (_mapController != null) {
+              _mapController!.animateCamera(
+                CameraUpdate.newLatLngZoom(target, 15),
+              );
+              _centeredFromCurrent = true;
+            } else {
+              _pendingCenter = target;
+            }
+          }
+        });
+      });
+      _refListenerInitialized = true;
+    }
     final mapWidget = posAsync.when(
       data: (pos) {
         final LatLng center = widget.origin ?? (pos != null ? LatLng(pos.latitude, pos.longitude) : const LatLng(48.8566, 2.3522));
@@ -170,7 +195,7 @@ class _SearchMapState extends ConsumerState<SearchMap> with TickerProviderStateM
                 widget.onPickOrigin!(newPosition);
               }
             },
-            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueCyan), // Couleur proche #64A9A7 pour départ
+            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure), // Teinte turquoise proche #64A9A7 pour départ
             infoWindow: const InfoWindow(title: 'Départ'),
           ));
         }
@@ -184,7 +209,10 @@ class _SearchMapState extends ConsumerState<SearchMap> with TickerProviderStateM
                 widget.onMoveDestination!(newPosition);
               }
             },
-            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen), // Variation pour distinction
+            // Applique la couleur principale #64A9A7 au marqueur destination
+            icon: BitmapDescriptor.defaultMarkerWithHue(
+              HSVColor.fromColor(const Color(0xFF64A9A7)).hue,
+            ),
             infoWindow: const InfoWindow(title: 'Destination'),
           ));
         }
@@ -232,7 +260,26 @@ class _SearchMapState extends ConsumerState<SearchMap> with TickerProviderStateM
               _centeredFromCurrent = true;
               _pendingCenter = null;
             } else if (widget.origin != null) {
-              await _mapController!.animateCamera(CameraUpdate.newLatLngZoom(widget.origin!, 15));
+              final hasRouteNow = widget.routePolyline != null && widget.routePolyline!.isNotEmpty;
+              if (!hasRouteNow) {
+                await _mapController!.animateCamera(CameraUpdate.newLatLngZoom(widget.origin!, 15));
+              }
+            }
+            // Si une animation de route était en attente avant la création de la carte, la lancer maintenant
+            if ((_pendingRouteToAnimate != null && _pendingRouteToAnimate!.isNotEmpty)) {
+              final pending = _pendingRouteToAnimate!;
+              _pendingRouteToAnimate = null;
+              // Utiliser un postFrame pour garantir que le widget est monté et prêt
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted) return;
+                _startRouteAnimation(pending);
+              });
+            } else if ((widget.routePolyline != null && widget.routePolyline!.isNotEmpty)) {
+              // Si une route existe déjà quand la carte devient prête, l'animer pour plus de fiabilité
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted) return;
+                _startRouteAnimation(widget.routePolyline!);
+              });
             }
           },
           onTap: (LatLng position) {
@@ -242,10 +289,12 @@ class _SearchMapState extends ConsumerState<SearchMap> with TickerProviderStateM
             }
             // Si on a une origine mais pas de destination, définir comme destination
             else if (widget.destination == null && widget.onMoveDestination != null) {
+              // Déclenche la mise à jour de la destination (la page mettra à jour le champ texte)
               widget.onMoveDestination!(position);
             }
             // Si on a les deux, mettre à jour la destination
             else if (widget.onMoveDestination != null) {
+              // Mise à jour destination + relance animation côté page
               widget.onMoveDestination!(position);
             }
           },

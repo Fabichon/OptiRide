@@ -5,6 +5,9 @@ import 'package:optiride/features/search/presentation/widgets/search_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'dart:async';
+import 'package:optiride/providers.dart';
+import 'dart:math' as math;
+import 'package:optiride/comparator/comparator_page.dart';
 
 class SearchView extends ConsumerStatefulWidget {
   const SearchView({super.key});
@@ -19,6 +22,7 @@ class _SearchViewState extends ConsumerState<SearchView> {
   bool _routing = false;
   double _distance = 0;
   int _duration = 0;
+  List<LatLng> _routePolyline = const [];
 
   @override
   void initState() {
@@ -75,12 +79,27 @@ class _SearchViewState extends ConsumerState<SearchView> {
         );
       });
     } else {
+      final coordsLabel = '${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}';
+      _destinationController.text = coordsLabel;
       setState(() {
         _query = _query.copyWith(
-          destinationAddress: 'Destination',
+          destinationAddress: coordsLabel,
           destinationLat: position.latitude,
           destinationLng: position.longitude,
         );
+      });
+      Future(() async {
+        final reverse = ref.read(reverseGeocodingServiceProvider);
+        final addr = await reverse.reverse(position.latitude, position.longitude);
+        if (!mounted) return;
+        if (addr != null &&
+            _query.destinationLat == position.latitude &&
+            _query.destinationLng == position.longitude) {
+          setState(() {
+            _destinationController.text = addr;
+            _query = _query.copyWith(destinationAddress: addr);
+          });
+        }
       });
     }
     if (_isQueryComplete()) {
@@ -95,18 +114,55 @@ class _SearchViewState extends ConsumerState<SearchView> {
       _routing = true;
       _distance = 0;
       _duration = 0;
+      _routePolyline = const [];
+    });
+    final oLat = _query.pickupLat!;
+    final oLng = _query.pickupLng!;
+    final dLat = _query.destinationLat!;
+    final dLng = _query.destinationLng!;
+
+    try {
+      final svc = ref.read(directionsServiceProvider);
+      final res = await svc.route(originLat: oLat, originLng: oLng, destLat: dLat, destLng: dLng);
+      if (!mounted) return;
+      if (res != null && res.polyline.isNotEmpty) {
+        setState(() {
+          _routing = false;
+          _distance = res.distanceMeters.toDouble();
+          _duration = res.durationSeconds;
+          _routePolyline = res.polyline.map((p) => LatLng(p[0], p[1])).toList();
+        });
+        return;
+      }
+    } catch (_) {}
+
+  double deg2rad(double d) => d * 3.141592653589793 / 180.0;
+    final R = 6371000.0;
+  final dLatR = deg2rad(dLat - oLat);
+  final dLngR = deg2rad(dLng - oLng);
+  final a = (math.sin(dLatR / 2) * math.sin(dLatR / 2)) +
+    math.cos(deg2rad(oLat)) * math.cos(deg2rad(dLat)) *
+      (math.sin(dLngR / 2) * math.sin(dLngR / 2));
+    final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+    final distance = R * c;
+    final durationSeconds = ((distance / 1000) / 45.0 * 3600).round();
+
+    const steps = 60;
+    final List<LatLng> line = List.generate(steps + 1, (i) {
+      final t = i / steps;
+      return LatLng(
+        oLat + (dLat - oLat) * t,
+        oLng + (dLng - oLng) * t,
+      );
     });
 
-    // Simulation d'un calcul d'itinéraire
-    await Future.delayed(const Duration(seconds: 1));
-    
-    if (mounted) {
-      setState(() {
-        _routing = false;
-        _distance = 15000; // 15 km en mètres
-        _duration = 1200;  // 20 minutes en secondes
-      });
-    }
+    if (!mounted) return;
+    setState(() {
+      _routing = false;
+      _distance = distance;
+      _duration = durationSeconds;
+      _routePolyline = line;
+    });
   }
 
   @override
@@ -123,6 +179,7 @@ class _SearchViewState extends ConsumerState<SearchView> {
             : null,
           onPickOrigin: (position) => _onDrag(position, true),
           onMoveDestination: (position) => _onDrag(position, false),
+          routePolyline: _routePolyline,
         ),
         
         // Interface utilisateur - Menu en haut pour laisser la place aux suggestions comme Uber
@@ -133,13 +190,13 @@ class _SearchViewState extends ConsumerState<SearchView> {
           child: Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.95),
+              color: Colors.white.withValues(alpha: 0.95),
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.2),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
+                  color: Colors.black.withValues(alpha: 0.12),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
                 ),
               ],
             ),
@@ -221,6 +278,40 @@ class _SearchViewState extends ConsumerState<SearchView> {
                     ),
                   ),
                 ),
+                const SizedBox(height: 8),
+                // Bouton comparer
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: OutlinedButton(
+                    onPressed: () {
+                      final oLat = _query.pickupLat ?? 48.8546;
+                      final oLng = _query.pickupLng ?? 2.3477;
+                      final dLat = _query.destinationLat ?? 48.8700;
+                      final dLng = _query.destinationLng ?? 2.3333;
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => ComparatorPage(
+                            originLat: oLat,
+                            originLng: oLng,
+                            destLat: dLat,
+                            destLng: dLng,
+                            when: DateTime.now(),
+                          ),
+                        ),
+                      );
+                    },
+                    style: OutlinedButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text(
+                      'Comparer des offres',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -238,8 +329,8 @@ class _SearchViewState extends ConsumerState<SearchView> {
                 borderRadius: BorderRadius.circular(8),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 4,
+                    color: Colors.black.withValues(alpha: 0.1),
+                    blurRadius: 6,
                     offset: const Offset(0, 2),
                   ),
                 ],

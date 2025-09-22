@@ -16,7 +16,7 @@ class MainLayout extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 1,
-        shadowColor: Colors.grey.withOpacity(0.3),
+        shadowColor: Colors.grey.withValues(alpha: 0.3),
         centerTitle: true,
         title: Builder(builder: (context) {
           final color = Theme.of(context).colorScheme.primary;

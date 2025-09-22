@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:optiride/core/models/place_suggestion.dart';
 import 'package:optiride/core/models/place_details.dart';
@@ -45,16 +46,16 @@ class PlacesService {
     try {
       final resp = await http.get(uri);
       if (resp.statusCode != 200) {
-        print('Places API HTTP Error: ${resp.statusCode} - ${resp.body}');
+        debugPrint('Places API HTTP Error: ${resp.statusCode} - ${resp.body}');
         return [];
       }
       final data = json.decode(resp.body) as Map<String, dynamic>;
       
       // Vérifier si l'API a retourné une erreur
       if (data['status'] != 'OK' && data['status'] != 'ZERO_RESULTS') {
-        print('Places API Status Error: ${data['status']} - ${data['error_message'] ?? ''}');
+        debugPrint('Places API Status Error: ${data['status']} - ${data['error_message'] ?? ''}');
         if (data['status'] == 'REQUEST_DENIED') {
-          print('SOLUTION: Configurez les restrictions de votre API key dans Google Cloud Console');
+          debugPrint('SOLUTION: Configurez les restrictions de votre API key dans Google Cloud Console');
         }
         return [];
       }
@@ -62,7 +63,7 @@ class PlacesService {
       final predictions = (data['predictions'] as List?) ?? [];
       return predictions.map((e) => PlaceSuggestion.fromApi(e as Map<String, dynamic>)).toList();
     } catch (e) {
-      print('Places API Exception: $e');
+      debugPrint('Places API Exception: $e');
       return [];
     }
   }

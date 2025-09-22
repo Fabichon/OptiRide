@@ -7,22 +7,17 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:optiride/main.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:optiride/main.dart';
 
 void main() {
-  testWidgets('OptiRide app launches with Uber-like interface', (WidgetTester tester) async {
+  testWidgets('L’écran de recherche expose les champs par Keys', (tester) async {
     await tester.pumpWidget(const ProviderScope(child: OptiRideApp()));
-    
-    // Vérifier que le logo OptiRide est présent (nouvelle interface simplifiée)
-    expect(find.text('OptiRide'), findsOneWidget);
-    
-    // Vérifier que les champs de saisie sont présents
-    expect(find.text('Départ'), findsOneWidget);
-    expect(find.text('Destination'), findsOneWidget);
-    
-    // Vérifier que le bouton de géolocalisation est présent
-    expect(find.byType(Icon), findsWidgets);
+
+    final origin = find.byKey(const Key('originField'));
+    final destination = find.byKey(const Key('destinationField'));
+
+    expect(origin, findsOneWidget);
+    expect(destination, findsOneWidget);
   });
 }

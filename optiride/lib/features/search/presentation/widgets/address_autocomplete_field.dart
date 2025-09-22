@@ -12,6 +12,7 @@ class AddressAutocompleteField extends ConsumerStatefulWidget {
   final Widget? prefixIcon;
   final bool isOrigin; // Pour distinguer origine/destination
   final Function(Map<String, double>, String)? onAddressSelected;
+  final Key? fieldKey; // Key de test stable
 
   const AddressAutocompleteField({
     super.key,
@@ -22,6 +23,7 @@ class AddressAutocompleteField extends ConsumerStatefulWidget {
     this.prefixIcon,
     this.isOrigin = false,
     this.onAddressSelected,
+    this.fieldKey,
   });
 
   @override
@@ -68,7 +70,8 @@ class _AddressAutocompleteFieldState extends ConsumerState<AddressAutocompleteFi
       // Demande la permission si nécessaire
       await Geolocator.requestPermission();
       // Obtient la position actuelle
-      Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+  const settings = LocationSettings(accuracy: LocationAccuracy.best, distanceFilter: 5);
+  Position position = await Geolocator.getCurrentPosition(locationSettings: settings);
       // Tente un reverse geocoding pour une adresse formatée
       final reverse = ref.read(reverseGeocodingServiceProvider);
       final addr = await reverse.reverse(position.latitude, position.longitude) ?? 'Position actuelle';
@@ -78,6 +81,7 @@ class _AddressAutocompleteFieldState extends ConsumerState<AddressAutocompleteFi
       widget.onAddressSelected?.call({'lat': position.latitude, 'lng': position.longitude}, addr);
     } catch (e) {
       // Gère les erreurs (ex: permission refusée)
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Erreur lors de la récupération de la position actuelle')),
       );
@@ -113,6 +117,7 @@ class _AddressAutocompleteFieldState extends ConsumerState<AddressAutocompleteFi
       mainAxisSize: MainAxisSize.min,
       children: [
         TextFormField(
+          key: widget.fieldKey ?? Key(widget.isOrigin ? 'originField' : 'destinationField'),
           controller: _controller,
           style: const TextStyle(fontSize: 14),
           decoration: InputDecoration(
@@ -141,7 +146,7 @@ class _AddressAutocompleteFieldState extends ConsumerState<AddressAutocompleteFi
                    borderRadius: BorderRadius.circular(8),
                    boxShadow: [
                      BoxShadow(
-                       color: Colors.black.withOpacity(0.1),
+                       color: Colors.black.withValues(alpha: 0.08),
                        blurRadius: 8,
                        offset: const Offset(0, 2),
                      ),

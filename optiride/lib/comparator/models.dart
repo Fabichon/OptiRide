@@ -4,7 +4,7 @@
 // définitions de données avec null-safety activée.
 
 /// Critères de tri pour les offres.
-enum ComparatorSort { cheapest, fastest, mostExpensive }
+enum ComparatorSort { cheapest, fastest }
 
 /// Types de catégories de course supportées par les plateformes VTC.
 enum RideCategory { all, standard, premium, xl, pet, woman }
