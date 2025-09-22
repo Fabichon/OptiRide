@@ -11,13 +11,8 @@ String formatPriceEUR(int cents) {
 
 /// Tente l’ouverture du deeplink d’app, sinon fallback vers l’URL web.
 Future<void> openDeepLinkOrWeb({required String appUri, required String webUrl}) async {
-  final deep = Uri.tryParse(appUri);
+  // Suppression du deeplink Uber pour l'instant, ouverture du site web uniquement
   final web = Uri.tryParse(webUrl);
-
-  if (deep != null) {
-    final ok = await launchUrl(deep, mode: LaunchMode.externalApplication);
-    if (ok) return;
-  }
   if (web != null) {
     await launchUrl(web, mode: LaunchMode.externalApplication);
   }
